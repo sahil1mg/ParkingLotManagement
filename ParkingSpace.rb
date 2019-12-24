@@ -1,41 +1,87 @@
 require "./Vehicles.rb"
+require "./CommonFunc.rb"
 class ParkingSpace
-    attr_reader :floor, :rows, :columns, :space, :money_earned
-
+    attr_reader :floor, :rows, :columns, :space, :money_earned, :three_d_array
+    attr_writer :money_earned
     def initialize(floor, rows, columns)
         @floor = floor
         @rows = rows
         @columns = columns
         @space = Hash.new
-    end
-
-    def get_int()
-        input = 0;
-        while(true)
-            input = gets.chomp.to_i
-            if(input==0)
-                puts "Kindly enter a correct number"
-            else
-                break
+        @money_earned=0
+        @three_d_array = Array.new(floor)
+        for i in 0..floor-1
+            three_d_array[i]=Array.new(rows)
+            for j in 0..rows-1
+                three_d_array[i][j]=Array.new(columns)
             end
         end
-        return input
     end
 
-    def park()
+    def park
         puts "You have chosen Parking Option"
+        vehicle = get_vehicle_type get_validated_car_number
+        park_main vehicle
+    end
+
+    def park_main(vehicle)
         key = get_parking_address
-        if(space.has_key? key)
-            puts "This space is already taken";
-            puts "Kindly choose a new space";
-            self.park
-        else
-            park_core key, get_validated_car_number
+        if(can_park? key, vehicle)
+            park_core key, vehicle
             puts "*"*50
             puts "Your Vehicle is parked"
             puts "*"*50
             puts "Logger : #{space}"
+            @money_earned+=vehicle.cost_of_parking
+        else
+            puts "This space is already taken";
+            puts "Kindly choose a new space";
+            self.park_main vehicle
         end
+    end
+
+    def can_park?(key, vehicle)
+        return_boolean = true
+        array = key.split('_');
+        floor = array[0].to_i
+        row_min = (array[1].to_i) - 1
+        row_max = row_min + ((vehicle.row_space.to_i) -1)
+        column_min = (array[2].to_i) -1
+        column_max =  column_min + ((vehicle.column_space.to_i) -1)
+        #puts three_d_array
+        if(space.has_key? key)
+            return false
+        else
+            for i in row_min..row_max
+                for j in column_min..column_max
+                    if three_d_array[floor][i][j]!=nil
+                        return false
+                    end
+                end
+            end
+        end
+        return return_boolean
+    end
+
+    def get_vehicle_type(car_number)
+        car_type = nil
+        puts "Kindly choose the Vehicle Type from below option"
+        puts "1) Car"
+        puts "2) Bike"
+        puts "3) Truck"
+        car_type_option = get_int
+        case car_type_option
+        when 1
+            car_type = Car.new(car_number)
+        when 2
+            car_type = Bike.new(car_number)
+        when 3
+            car_type = Truck.new(car_number)
+        else
+            puts "You have chosen the wrong option"
+            car_type = get_vehicle_type car_number
+        end
+        return car_type
     end
 
     def unpark
@@ -77,12 +123,30 @@ class ParkingSpace
         end
         puts "Enter new location"
         new_key = get_parking_address
-        if(space.has_key? new_key)
+        if(space.has_key?(new_key) && space[new_key]!=car_number )
             puts "This parking space is already in use"
             return
         end
-        unpark_using_car_number_core car_number
-        park_core new_key, car_number 
+        vehicle = unpark_using_car_number_core car_number
+        park_core new_key, vehicle
+        puts "location changed successfully" 
+    end
+
+    def print_parking_space
+        for k in 0..floor-1
+            puts "*****************#{k} Floor***************"
+            two_d_array1 = three_d_array[k]
+            for i in 0..rows-1
+                for j in 0..columns-1
+                    if(two_d_array1[i][j]==nil)
+                        print("#{j+1}|            |")
+                    else
+                        print "#{j+1}|#{two_d_array1[i][j]}|"
+                    end
+                end
+                puts ""
+            end
+        end
     end
 
     private
@@ -91,7 +155,7 @@ class ParkingSpace
         puts "Kindly enter your Vehicle number : (Format -> 'AA 12 A 1234')"
         car_number = gets.chomp
         if(car_number.match(/^[a-zA-Z]{2}\s\d{2,3}\s[a-zA-Z]{1,3}\s\d{4}$/))
-            return car_number
+            return car_number.upcase
         else
             return get_validated_car_number
         end
@@ -112,8 +176,15 @@ class ParkingSpace
     end
 
     def unpark_using_car_number_core(car_number)
-        key = space.index(car_number)
-        space.delete(key)
+        vehicle = nil
+        while(space.key(car_number)!=nil)
+            key = space.key(car_number)
+            array = key.split('_')
+            vehicle = three_d_array[array[0].to_i][array[1].to_i][array[2].to_i]
+            three_d_array[array[0].to_i][array[1].to_i][array[2].to_i]=nil
+            space.delete(key)
+        end
+        return vehicle
     end
 
     def unpark_using_parking_address
@@ -121,7 +192,8 @@ class ParkingSpace
         key = get_parking_address
         if(space.has_key? key)
             car_number = space[key]
-            space.delete(key)
+            #space.delete(key)
+            unpark_using_car_number_core car_number
             puts "Vehicle : #{car_number} has been unparked"
             puts "logger : #{space}"
         else
@@ -138,7 +210,7 @@ class ParkingSpace
     end
 
     def get_floor
-        puts "Enter Floor at which vehicle needs to be parked (Floors Allowed - 0..#{floor-1}";
+        puts "Enter Floor at which vehicle needs to be parked (Floors Allowed - 0..#{floor-1})";
         floor_no = gets.chomp.to_i
         if (floor_no < 0 || floor_no >= floor)
             puts "invalid floor number"
@@ -148,7 +220,7 @@ class ParkingSpace
     end
 
     def get_row_no
-        puts "Enter Row at which vehicle needs to be parked (Rows Allowed - 1..#{rows}";
+        puts "Enter Row at which vehicle needs to be parked (Rows Allowed - 1..#{rows})";
         row_no = get_int
         if (row_no < 0 || row_no > rows)
             puts "invalid row number"
@@ -158,7 +230,7 @@ class ParkingSpace
     end
 
     def get_column_no
-        puts "Enter Column at which vehicle needs to be parked (Columns Allowed - 1..#{columns}";
+        puts "Enter Column at which vehicle needs to be parked (Columns Allowed - 1..#{columns})";
         column_no = get_int
         if (column_no < 0 || column_no > columns)
             puts "invalid column number"
@@ -172,7 +244,18 @@ class ParkingSpace
         puts "Floor : #{array[0]} Row : #{array[1]} Column : #{array[2]}"
     end
 
-    def park_core(key, car_number)
-        space[key]=car_number
+    def park_core(key, vehicle)
+        array = key.split('_');
+        floor = array[0].to_i
+        row_min = (array[1].to_i) -1
+        row_max = row_min + ((vehicle.row_space.to_i) -1)
+        column_min = (array[2].to_i) -1
+        column_max =  column_min + ((vehicle.column_space.to_i) -1)
+        for i in row_min..row_max
+            for j in column_min..column_max
+                three_d_array[floor][i][j]=vehicle
+                space["#{floor}_#{i}_#{j}"]=vehicle.vehicle_number
+            end
+        end
     end
 end
